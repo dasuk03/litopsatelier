@@ -15,9 +15,9 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { withBasePath } from "../../lib/paths";
 import { rub, type ProductMaterial } from "../../lib/products";
 import { ProductCard } from "../../product-card";
+import { ProductImage } from "../../product-image";
 import { useShop } from "../../shop";
 
 const materialChoices: ProductMaterial[] = [
@@ -165,7 +165,7 @@ export function ProductClient({ id }: { id: string }) {
                 key={`${image}-${index}`}
                 onClick={() => setActiveImage(index)}
               >
-                <img src={withBasePath(image)} alt={`${product.name}, вид ${index + 1}`} />
+                <ProductImage src={image} alt={`${product.name}, вид ${index + 1}`} />
               </button>
             ))}
           </div>
@@ -175,7 +175,7 @@ export function ProductClient({ id }: { id: string }) {
             onClick={() => setViewerOpen(true)}
             aria-label="Открыть изображение на весь экран"
           >
-            <img src={withBasePath(product.images[activeImage])} alt={product.name} />
+            <ProductImage src={product.images[activeImage]} alt={product.name} />
             <span>
               <ZoomIn size={17} /> Увеличить
             </span>
@@ -337,7 +337,7 @@ export function ProductClient({ id }: { id: string }) {
           <X size={23} />
         </button>
         <button className="image-viewer-backdrop" type="button" onClick={() => setViewerOpen(false)} />
-        <img src={withBasePath(product.images[activeImage])} alt={product.name} />
+        <ProductImage src={product.images[activeImage]} alt={product.name} />
       </div>
     </div>
   );

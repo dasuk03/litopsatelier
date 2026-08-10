@@ -662,10 +662,16 @@
 .admin-login input,.admin-document-editor input,.admin-document-editor textarea,.admin-form-grid input,.admin-form-grid select,.admin-form-grid textarea,.admin-image-url input { width: 100%; min-height: 48px; padding: 10px 13px; border: 1px solid var(--line); border-radius: 0; outline: 0; background: transparent; font: inherit; font-size: 12px; transition: border-color .25s,background .25s; }
 .admin-login input:focus,.admin-document-editor input:focus,.admin-document-editor textarea:focus,.admin-form-grid input:focus,.admin-form-grid select:focus,.admin-form-grid textarea:focus,.admin-image-url input:focus { border-color: var(--ink); background: #fff; }
 .admin-login .pill { width: 100%; margin-top: 26px; }
+.admin-login-switch { width: 100%; margin-top: 14px; border: 0; background: none; color: var(--muted); font-size: 9px; letter-spacing: .08em; text-decoration: underline; text-underline-offset: 4px; text-transform: uppercase; }
 .admin-login-error,.form-submit-error { margin: 14px 0 0; color: #a13f38; font-size: 10px; line-height: 1.55; }
 .admin-gate-card { text-align: center; }
 .admin-gate-card > svg { margin-bottom: 30px; }
 .admin-gate-card .pill { margin: 0 auto; }
+.admin-gate-card .pill + .pill { margin-top: 10px; }
+.admin-activation-code { display: grid; gap: 8px; margin: 0 auto 18px; text-align: left; }
+.admin-activation-code span { color: var(--muted); font-size: 8px; letter-spacing: .1em; text-transform: uppercase; }
+.admin-activation-code input { width: 100%; min-height: 48px; padding: 10px 13px; border: 1px solid var(--line); background: transparent; font: inherit; font-size: 12px; outline: 0; }
+.admin-activation-code input:focus { border-color: var(--ink); background: #fff; }
 .admin-status { display: flex; min-height: 100svh; align-items: center; justify-content: center; flex-direction: column; gap: 14px; color: var(--muted); }
 .admin-status.is-compact { min-height: 430px; }
 .admin-status p { margin: 0; font-size: 11px; }

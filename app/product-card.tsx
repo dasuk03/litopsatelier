@@ -3,8 +3,8 @@
 import { Heart, Plus } from "lucide-react";
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { withBasePath } from "./lib/paths";
 import { rub, type Product } from "./lib/products";
+import { ProductImage } from "./product-image";
 import { useShop } from "./shop";
 
 export function ProductCard({
@@ -33,7 +33,7 @@ export function ProductCard({
     >
       <div className="product-image">
         <Link href={productHref} aria-label={`Открыть ${product.name}`}>
-          <img src={withBasePath(product.images[0])} alt={`Браслет ${product.name}`} />
+          <ProductImage src={product.images[0]} alt={`Браслет ${product.name}`} />
         </Link>
         {badge && <span className="badge">{badge}</span>}
         <button

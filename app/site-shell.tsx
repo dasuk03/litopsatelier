@@ -25,6 +25,7 @@ import {
 } from "react";
 import { withBasePath } from "./lib/paths";
 import { rub } from "./lib/products";
+import { ProductImage } from "./product-image";
 import { useShop } from "./shop";
 
 const navigation = [
@@ -368,7 +369,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
               {cartRows.map(({ item, product }) =>
                 product ? (
                   <article className="cart-line" key={item.key}>
-                    <img src={withBasePath(product.images[0])} alt="" />
+                    <ProductImage src={product.images[0]} alt="" />
                     <div>
                       <div className="cart-line-title">
                         <div>

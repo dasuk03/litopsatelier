@@ -10,7 +10,9 @@ import {
   type LegalDocumentSlug,
 } from "./legal-documents";
 import type { Product } from "./products";
-import { isCmsConfigured, requireSupabase } from "./supabase";
+import { isCmsConfigured, requireNeon } from "./neon";
+
+export const neonImagePrefix = "neon-image:";
 
 type ProductRow = {
   id: string;
@@ -35,7 +37,7 @@ function messageFrom(error: unknown) {
 
 export async function loadPublishedProducts() {
   if (!isCmsConfigured) return null;
-  const client = requireSupabase();
+  const client = requireNeon();
   const { data, error } = await client
     .from("store_products")
     .select("id,data,published,sort_order")
@@ -52,7 +54,7 @@ export async function loadPublishedProducts() {
 }
 
 export async function loadAdminProducts() {
-  const client = requireSupabase();
+  const client = requireNeon();
   const { data, error } = await client
     .from("store_products")
     .select("id,data,published,sort_order")
@@ -67,8 +69,12 @@ export async function loadAdminProducts() {
   }));
 }
 
-export async function saveProduct(product: Product, sortOrder = 0) {
-  const client = requireSupabase();
+export async function saveProduct(
+  product: Product,
+  sortOrder = 0,
+  options?: { cleanupImages?: boolean },
+) {
+  const client = requireNeon();
   const normalized: Product = {
     ...product,
     published: product.published !== false,
@@ -82,11 +88,14 @@ export async function saveProduct(product: Product, sortOrder = 0) {
     updated_at: new Date().toISOString(),
   });
   if (error) throw new Error(error.message);
+  if (options?.cleanupImages !== false) {
+    await deleteUnusedProductImages(normalized.id, normalized.images);
+  }
   return normalized;
 }
 
 export async function saveProducts(products: Product[]) {
-  const client = requireSupabase();
+  const client = requireNeon();
   const rows = products.map((product, index) => ({
     id: product.id,
     data: { ...product, published: product.published !== false, sortOrder: index },
@@ -99,44 +108,149 @@ export async function saveProducts(products: Product[]) {
 }
 
 export async function deleteProduct(productId: string) {
-  const client = requireSupabase();
+  const client = requireNeon();
   const { error } = await client.from("store_products").delete().eq("id", productId);
   if (error) throw new Error(error.message);
 }
 
-function safeSegment(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9а-яё-]+/gi, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60) || "product";
+function imageReferenceId(value: string) {
+  return value.startsWith(neonImagePrefix) ? value.slice(neonImagePrefix.length) : null;
+}
+
+function blobToDataUri(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Не удалось подготовить фотографию"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function canvasBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
+  return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
+}
+
+async function compressProductImage(file: File) {
+  if (!file.type.startsWith("image/")) {
+    throw new Error(`Файл «${file.name}» не является изображением`);
+  }
+  if (file.size > 12 * 1024 * 1024) {
+    throw new Error(`Файл «${file.name}» больше 12 МБ`);
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.decoding = "async";
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error(`Формат «${file.name}» не удалось открыть в браузере`));
+      image.src = objectUrl;
+    });
+
+    const sourceWidth = image.naturalWidth;
+    const sourceHeight = image.naturalHeight;
+    const maxSide = 1800;
+    const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) throw new Error("Браузер не поддерживает обработку фотографий");
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+
+    let blob: Blob | null = null;
+    for (const quality of [0.84, 0.72, 0.6]) {
+      blob = await canvasBlob(canvas, "image/webp", quality);
+      if (blob && blob.size <= 4_000_000) break;
+    }
+    if (!blob) blob = await canvasBlob(canvas, "image/jpeg", 0.78);
+    if (!blob || blob.size > 4_000_000) {
+      throw new Error(`Фотографию «${file.name}» не удалось уменьшить до 4 МБ`);
+    }
+
+    return {
+      contentType: blob.type === "image/webp" ? "image/webp" : "image/jpeg",
+      dataUri: await blobToDataUri(blob),
+      sizeBytes: blob.size,
+      width,
+      height,
+    };
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function deleteUnusedProductImages(productId: string, references: string[]) {
+  const client = requireNeon();
+  const retained = new Set(references.map(imageReferenceId).filter((id): id is string => Boolean(id)));
+  const { data, error } = await client
+    .from("product_images")
+    .select("id")
+    .eq("product_id", productId);
+  if (error) throw new Error(error.message);
+  const stale = (data ?? []).map((row) => String(row.id)).filter((id) => !retained.has(id));
+  if (!stale.length) return;
+  const { error: deleteError } = await client.from("product_images").delete().in("id", stale);
+  if (deleteError) throw new Error(deleteError.message);
 }
 
 export async function uploadProductImages(files: File[], productId: string) {
-  const client = requireSupabase();
-  const urls: string[] = [];
+  const client = requireNeon();
+  const { data: sessionData, error: sessionError } = await client.auth.getSession();
+  if (sessionError) throw new Error(sessionError.message);
+  const userId = sessionData.session?.user.id;
+  if (!userId) throw new Error("Сессия администратора завершилась. Войдите снова.");
+
+  const references: string[] = [];
 
   for (const file of files) {
-    if (!file.type.startsWith("image/")) {
-      throw new Error(`Файл «${file.name}» не является изображением`);
-    }
-    if (file.size > 8 * 1024 * 1024) {
-      throw new Error(`Файл «${file.name}» больше 8 МБ`);
-    }
-
-    const extension = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "webp";
-    const path = `${safeSegment(productId)}/${Date.now()}-${crypto.randomUUID()}.${extension}`;
-    const { error } = await client.storage.from("product-images").upload(path, file, {
-      cacheControl: "31536000",
-      contentType: file.type,
-      upsert: false,
-    });
+    const compressed = await compressProductImage(file);
+    const { data, error } = await client
+      .from("product_images")
+      .insert({
+        product_id: productId,
+        content_type: compressed.contentType,
+        data_uri: compressed.dataUri,
+        size_bytes: compressed.sizeBytes,
+        width: compressed.width,
+        height: compressed.height,
+        sort_order: references.length,
+        uploaded_by: userId,
+      })
+      .select("id")
+      .single();
     if (error) throw new Error(error.message);
-    const { data } = client.storage.from("product-images").getPublicUrl(path);
-    urls.push(data.publicUrl);
+    references.push(`${neonImagePrefix}${data.id}`);
   }
 
-  return urls;
+  return references;
+}
+
+const imageCache = new Map<string, Promise<string>>();
+
+export function loadProductImage(reference: string) {
+  const id = imageReferenceId(reference);
+  if (!id) return Promise.resolve(reference);
+  const cached = imageCache.get(id);
+  if (cached) return cached;
+
+  const request = (async () => {
+    const client = requireNeon();
+    const { data, error } = await client
+      .from("product_images")
+      .select("data_uri")
+      .eq("id", id)
+      .single();
+    if (error) throw new Error(error.message);
+    return String(data.data_uri);
+  })();
+  imageCache.set(id, request);
+  return request;
 }
 
 function rowToDocument(row: LegalDocumentRow): LegalDocument | null {
@@ -154,7 +268,7 @@ function rowToDocument(row: LegalDocumentRow): LegalDocument | null {
 
 export async function loadLegalDocuments(options?: { admin?: boolean }) {
   if (!isCmsConfigured) return defaultLegalDocuments;
-  const client = requireSupabase();
+  const client = requireNeon();
   let query = client
     .from("legal_documents")
     .select("slug,title,summary,body,published,sort_order,updated_at")
@@ -171,7 +285,7 @@ export async function loadLegalDocuments(options?: { admin?: boolean }) {
 }
 
 export async function saveLegalDocument(document: LegalDocument) {
-  const client = requireSupabase();
+  const client = requireNeon();
   const updatedAt = new Date().toISOString();
   const { error } = await client.from("legal_documents").upsert({
     slug: document.slug,
@@ -187,14 +301,21 @@ export async function saveLegalDocument(document: LegalDocument) {
 }
 
 export async function isCurrentUserAdmin() {
-  const client = requireSupabase();
+  const client = requireNeon();
   const { data, error } = await client.rpc("is_admin");
   if (error) throw new Error(error.message);
   return Boolean(data);
 }
 
+export async function claimAdmin(inviteToken: string) {
+  const client = requireNeon();
+  const { data, error } = await client.rpc("claim_admin", { invite_token: inviteToken.trim() });
+  if (error) throw new Error(error.message);
+  return Boolean(data);
+}
+
 export async function loadOrders() {
-  const client = requireSupabase();
+  const client = requireNeon();
   const { data, error } = await client
     .from("store_orders")
     .select("payload,status")
@@ -204,7 +325,7 @@ export async function loadOrders() {
 }
 
 export async function loadCustomRequests() {
-  const client = requireSupabase();
+  const client = requireNeon();
   const { data, error } = await client
     .from("custom_requests")
     .select("payload,status")
@@ -214,7 +335,7 @@ export async function loadCustomRequests() {
 }
 
 export async function loadContactMessages() {
-  const client = requireSupabase();
+  const client = requireNeon();
   const { data, error } = await client
     .from("contact_messages")
     .select("payload")
@@ -225,7 +346,7 @@ export async function loadContactMessages() {
 
 export async function submitOrder(order: OrderRecord) {
   if (!isCmsConfigured) return false;
-  const client = requireSupabase();
+  const client = requireNeon();
   const { error } = await client.from("store_orders").insert({
     id: order.id,
     payload: order,
@@ -238,7 +359,7 @@ export async function submitOrder(order: OrderRecord) {
 
 export async function submitCustomRequest(request: CustomRequestRecord) {
   if (!isCmsConfigured) return false;
-  const client = requireSupabase();
+  const client = requireNeon();
   const { error } = await client.from("custom_requests").insert({
     id: request.id,
     payload: request,
@@ -251,7 +372,7 @@ export async function submitCustomRequest(request: CustomRequestRecord) {
 
 export async function submitContactMessage(message: ContactMessageRecord) {
   if (!isCmsConfigured) return false;
-  const client = requireSupabase();
+  const client = requireNeon();
   const { error } = await client.from("contact_messages").insert({
     id: message.id,
     payload: message,
@@ -262,20 +383,22 @@ export async function submitContactMessage(message: ContactMessageRecord) {
 }
 
 export async function setOrderStatus(id: string, status: OrderRecord["status"]) {
-  const client = requireSupabase();
+  const client = requireNeon();
   const { error } = await client.from("store_orders").update({ status }).eq("id", id);
   if (error) throw new Error(error.message);
 }
 
 export async function setCustomRequestStatus(id: string, status: CustomRequestRecord["status"]) {
-  const client = requireSupabase();
+  const client = requireNeon();
   const { error } = await client.from("custom_requests").update({ status }).eq("id", id);
   if (error) throw new Error(error.message);
 }
 
 export function readableCmsError(error: unknown) {
   const message = messageFrom(error);
-  if (/invalid login credentials/i.test(message)) return "Неверный логин или пароль";
+  if (/invalid (login credentials|email or password)|incorrect password/i.test(message)) {
+    return "Неверный логин или пароль";
+  }
   if (/row-level security|permission denied/i.test(message)) {
     return "У этой учётной записи нет прав администратора";
   }

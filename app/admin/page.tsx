@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
+  claimAdmin,
   deleteProduct as deleteCmsProduct,
   isCurrentUserAdmin,
   loadAdminProducts,
@@ -36,14 +37,14 @@ import {
   uploadProductImages,
 } from "../lib/cms";
 import { defaultLegalDocuments, type LegalDocument } from "../lib/legal-documents";
-import { withBasePath } from "../lib/paths";
 import { defaultProducts, rub, type Product } from "../lib/products";
 import {
   type ContactMessageRecord,
   type CustomRequestRecord,
   type OrderRecord,
 } from "../lib/storage";
-import { isCmsConfigured, supabase } from "../lib/supabase";
+import { isCmsConfigured, neon } from "../lib/neon";
+import { ProductImage } from "../product-image";
 import { useShop } from "../shop";
 import { createBlankProduct, ProductEditor } from "./product-editor";
 
@@ -62,8 +63,10 @@ export default function AdminPage() {
   const { products, setProducts, showToast } = useShop();
   const [authState, setAuthState] = useState<AuthState>(isCmsConfigured ? "checking" : "unconfigured");
   const [authError, setAuthError] = useState("");
+  const [authMode, setAuthMode] = useState<"signin" | "setup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [accountEmail, setAccountEmail] = useState("");
   const [signingIn, setSigningIn] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("products");
@@ -81,8 +84,8 @@ export default function AdminPage() {
   const importRef = useRef<HTMLInputElement>(null);
 
   const verifyAccess = useCallback(async () => {
-    if (!supabase) return setAuthState("unconfigured");
-    const { data } = await supabase.auth.getSession();
+    if (!neon) return setAuthState("unconfigured");
+    const { data } = await neon.auth.getSession();
     if (!data.session) return setAuthState("signed-out");
     setAccountEmail(data.session.user.email ?? "Администратор");
     try {
@@ -95,9 +98,9 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!neon) return;
     void verifyAccess();
-    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data } = neon.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT" || !session) {
         setAuthState("signed-out");
         setAccountEmail("");
@@ -141,10 +144,10 @@ export default function AdminPage() {
 
   const signIn = async (event: FormEvent) => {
     event.preventDefault();
-    if (!supabase) return;
+    if (!neon) return;
     setSigningIn(true);
     setAuthError("");
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const { error } = await neon.auth.signInWithPassword({ email: email.trim(), password });
     if (error) {
       setAuthError(readableCmsError(error));
       setSigningIn(false);
@@ -155,16 +158,81 @@ export default function AdminPage() {
     setSigningIn(false);
   };
 
+  const createOwnerAccount = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!neon) return;
+    if (password.length < 8) {
+      setAuthError("Пароль должен содержать не менее 8 символов");
+      return;
+    }
+    setSigningIn(true);
+    setAuthError("");
+    try {
+      const { data, error } = await neon.auth.signUp({
+        email: email.trim(),
+        password,
+        options: { data: { name: "Владелец Litops Atelier" } },
+      });
+      if (error) {
+        setAuthError(readableCmsError(error));
+        return;
+      }
+      if (!data.session) {
+        setAuthError("Аккаунт создан. Подтвердите email, затем войдите и введите код владельца.");
+        setAuthMode("signin");
+        return;
+      }
+      const allowed = await claimAdmin(inviteCode);
+      if (!allowed) {
+        setAuthError("Одноразовый код владельца неверен или уже использован");
+        setAuthState("unauthorized");
+        return;
+      }
+      setPassword("");
+      setInviteCode("");
+      await verifyAccess();
+    } catch (error) {
+      setAuthError(readableCmsError(error));
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
+  const activateOwner = async () => {
+    setSigningIn(true);
+    setAuthError("");
+    try {
+      const allowed = await claimAdmin(inviteCode);
+      if (!allowed) {
+        setAuthError("Одноразовый код владельца неверен, истёк или уже использован");
+        return;
+      }
+      setInviteCode("");
+      await verifyAccess();
+    } catch (error) {
+      setAuthError(readableCmsError(error));
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
   const signOut = async () => {
-    await supabase?.auth.signOut();
+    await neon?.auth.signOut();
   };
 
   const persistProduct = async (product: Product, files: File[]) => {
     setSavingProduct(true);
     try {
-      const uploaded = files.length ? await uploadProductImages(files, product.id) : [];
       const existingIndex = products.findIndex((item) => item.id === product.id);
       const sortOrder = existingIndex >= 0 ? existingIndex : products.length;
+      if (existingIndex < 0) {
+        await saveProduct(
+          { ...product, published: false },
+          sortOrder,
+          { cleanupImages: false },
+        );
+      }
+      const uploaded = files.length ? await uploadProductImages(files, product.id) : [];
       const saved = await saveProduct({ ...product, images: [...product.images, ...uploaded] }, sortOrder);
       const next = existingIndex >= 0
         ? products.map((item, index) => index === existingIndex ? saved : item)
@@ -269,7 +337,21 @@ export default function AdminPage() {
   if (authState === "checking") return <AdminStatus text="Проверяем доступ…" />;
   if (authState === "unconfigured") return <AdminSetupNotice />;
   if (authState === "signed-out") {
-    return <AdminLogin email={email} password={password} error={authError} loading={signingIn} onEmail={setEmail} onPassword={setPassword} onSubmit={signIn} />;
+    return (
+      <AdminLogin
+        mode={authMode}
+        email={email}
+        password={password}
+        inviteCode={inviteCode}
+        error={authError}
+        loading={signingIn}
+        onMode={(mode) => { setAuthMode(mode); setAuthError(""); }}
+        onEmail={setEmail}
+        onPassword={setPassword}
+        onInviteCode={setInviteCode}
+        onSubmit={authMode === "signin" ? signIn : createOwnerAccount}
+      />
+    );
   }
   if (authState === "unauthorized") {
     return (
@@ -278,7 +360,9 @@ export default function AdminPage() {
           <Settings2 size={34} strokeWidth={1.2} />
           <p className="eyebrow">Доступ ограничен</p>
           <h1>Аккаунт не назначен администратором</h1>
-          <p>{authError || "Добавьте пользователя в список администраторов проекта, затем войдите повторно."}</p>
+          <p>{authError || "Для первой активации введите одноразовый код владельца."}</p>
+          <label className="admin-activation-code"><span>Код владельца</span><input value={inviteCode} onChange={(event) => setInviteCode(event.target.value)} autoComplete="one-time-code" /></label>
+          <button className="pill pill-dark" type="button" onClick={activateOwner} disabled={signingIn || !inviteCode.trim()}><Check size={16} /> {signingIn ? "Проверяем…" : "Активировать доступ"}</button>
           <button className="pill pill-dark" type="button" onClick={signOut}><LogOut size={16} /> Выйти</button>
         </div>
       </div>
@@ -335,7 +419,7 @@ export default function AdminPage() {
               <div className="admin-product-list">
                 {products.map((product) => (
                   <article key={product.id}>
-                    <img src={withBasePath(product.images[0] ?? "/images/product-terra.webp")} alt="" />
+                    <ProductImage src={product.images[0] ?? "/images/product-terra.webp"} alt="" />
                     <div className="admin-product-main">
                       <div><span>{product.category} · {product.stone}</span><h3>{product.name}</h3><p>{product.stoneOrigin}</p></div>
                       <div className="admin-product-price"><strong>{rub(product.price)}</strong>{product.oldPrice && <del>{rub(product.oldPrice)}</del>}<small>{product.stock} шт.</small></div>
@@ -390,18 +474,21 @@ export default function AdminPage() {
   );
 }
 
-function AdminLogin({ email, password, error, loading, onEmail, onPassword, onSubmit }: { email: string; password: string; error: string; loading: boolean; onEmail: (value: string) => void; onPassword: (value: string) => void; onSubmit: (event: FormEvent) => void }) {
+function AdminLogin({ mode, email, password, inviteCode, error, loading, onMode, onEmail, onPassword, onInviteCode, onSubmit }: { mode: "signin" | "setup"; email: string; password: string; inviteCode: string; error: string; loading: boolean; onMode: (mode: "signin" | "setup") => void; onEmail: (value: string) => void; onPassword: (value: string) => void; onInviteCode: (value: string) => void; onSubmit: (event: FormEvent) => void }) {
+  const setup = mode === "setup";
   return (
     <div className="inner-page admin-gate">
       <form className="admin-login" onSubmit={onSubmit}>
         <div className="admin-login-mark"><LogIn size={26} /></div>
-        <p className="eyebrow">Закрытый раздел</p>
-        <h1>Вход в управление</h1>
-        <p>Используйте учётную запись владельца Litops Atelier.</p>
+        <p className="eyebrow">{setup ? "Первичная активация" : "Закрытый раздел"}</p>
+        <h1>{setup ? "Создать аккаунт владельца" : "Вход в управление"}</h1>
+        <p>{setup ? "Потребуется одноразовый код, созданный при подключении Neon." : "Используйте учётную запись владельца Litops Atelier."}</p>
         <label><span>Логин</span><input type="email" value={email} onChange={(event) => onEmail(event.target.value)} autoComplete="username" required /></label>
-        <label><span>Пароль</span><input type="password" value={password} onChange={(event) => onPassword(event.target.value)} autoComplete="current-password" required /></label>
+        <label><span>Пароль</span><input type="password" value={password} onChange={(event) => onPassword(event.target.value)} autoComplete={setup ? "new-password" : "current-password"} minLength={setup ? 8 : undefined} required /></label>
+        {setup && <label><span>Одноразовый код владельца</span><input value={inviteCode} onChange={(event) => onInviteCode(event.target.value)} autoComplete="one-time-code" required /></label>}
         {error && <p className="admin-login-error" role="alert">{error}</p>}
-        <button className="pill pill-dark" type="submit" disabled={loading}>{loading ? "Проверяем…" : "Войти"} <LogIn size={16} /></button>
+        <button className="pill pill-dark" type="submit" disabled={loading}>{loading ? "Проверяем…" : setup ? "Создать и активировать" : "Войти"} <LogIn size={16} /></button>
+        <button className="admin-login-switch" type="button" onClick={() => onMode(setup ? "signin" : "setup")}>{setup ? "У меня уже есть аккаунт" : "Первая активация владельца"}</button>
       </form>
     </div>
   );
@@ -413,8 +500,8 @@ function AdminSetupNotice() {
       <div className="admin-gate-card">
         <Settings2 size={34} strokeWidth={1.2} />
         <p className="eyebrow">Первичная настройка</p>
-        <h1>Хранилище ещё не подключено</h1>
-        <p>Интерфейс и защита готовы. Добавьте адрес проекта и публичный ключ хранилища в настройки сборки, затем создайте первую учётную запись администратора.</p>
+        <h1>Backend Neon ещё не подключён</h1>
+        <p>Добавьте публичные адреса Neon Auth и Data API в настройки сборки. Пароль и строка подключения к PostgreSQL здесь не используются.</p>
       </div>
     </div>
   );

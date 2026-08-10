@@ -11,10 +11,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { withBasePath } from "../lib/paths";
 import { rub } from "../lib/products";
 import { readLocal, writeLocal, type OrderRecord } from "../lib/storage";
 import { readableCmsError, submitOrder } from "../lib/cms";
+import { ProductImage } from "../product-image";
 import { useShop } from "../shop";
 
 type FormState = {
@@ -392,7 +392,7 @@ export default function CheckoutPage() {
           {rows.map(({ item, product }) =>
             product ? (
               <article key={item.key}>
-                <img src={withBasePath(product.images[0])} alt="" />
+                <ProductImage src={product.images[0]} alt="" />
                 <div>
                   <h3>{product.name}</h3>
                   <p>

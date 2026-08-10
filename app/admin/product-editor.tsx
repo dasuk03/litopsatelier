@@ -2,12 +2,12 @@
 
 import { ImagePlus, Save, Trash2, UploadCloud, X } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { withBasePath } from "../lib/paths";
 import {
   type Product,
   type ProductCategory,
   type ProductMaterial,
 } from "../lib/products";
+import { ProductImage } from "../product-image";
 
 const categories: ProductCategory[] = [
   "Браслеты",
@@ -201,7 +201,7 @@ export function ProductEditor({
               <input type="file" accept="image/*" multiple onChange={(event) => addFiles(Array.from(event.target.files ?? []))} />
               <UploadCloud size={30} strokeWidth={1.3} />
               <strong>Перетащите фотографии сюда</strong>
-              <span>или нажмите для выбора · до 8 МБ на файл</span>
+              <span>или нажмите для выбора · до 12 МБ, фотографии будут сжаты автоматически</span>
             </label>
             <div className="admin-image-url">
               <input value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} placeholder="Или вставьте прямую ссылку на изображение" />
@@ -210,7 +210,7 @@ export function ProductEditor({
             <div className="admin-image-grid">
               {draft.images.map((image, index) => (
                 <figure key={`${image}-${index}`}>
-                  <img src={withBasePath(image)} alt={`Фото ${index + 1}`} />
+                  <ProductImage src={image} alt={`Фото ${index + 1}`} />
                   <button type="button" onClick={() => patch("images", draft.images.filter((_, imageIndex) => imageIndex !== index))} aria-label="Удалить фотографию"><Trash2 size={15} /></button>
                   {index === 0 && <figcaption>Главное фото</figcaption>}
                 </figure>
