@@ -1,0 +1,66 @@
+"use client";
+
+import { Heart, Plus } from "lucide-react";
+import Link from "next/link";
+import type { CSSProperties } from "react";
+import { withBasePath } from "./lib/paths";
+import { rub, type Product } from "./lib/products";
+import { useShop } from "./shop";
+
+export function ProductCard({
+  product,
+  index = 0,
+}: {
+  product: Product;
+  index?: number;
+}) {
+  const { favorites, toggleFavorite, addToCart } = useShop();
+  const favorite = favorites.includes(product.id);
+  const badge = product.isNew
+    ? "Новинка"
+    : product.isPopular
+      ? "Популярное"
+      : product.oldPrice
+        ? "Специальная цена"
+        : undefined;
+
+  return (
+    <article
+      className="product-card"
+      data-reveal
+      style={{ "--delay": `${index * 70}ms` } as CSSProperties}
+    >
+      <div className="product-image">
+        <Link href={`/product/${product.id}`} aria-label={`Открыть ${product.name}`}>
+          <img src={withBasePath(product.images[0])} alt={`Браслет ${product.name}`} />
+        </Link>
+        {badge && <span className="badge">{badge}</span>}
+        <button
+          className={`favorite ${favorite ? "is-active" : ""}`}
+          type="button"
+          onClick={() => toggleFavorite(product.id)}
+          aria-label={favorite ? "Удалить из избранного" : "Добавить в избранное"}
+        >
+          <Heart size={18} strokeWidth={1.5} />
+        </button>
+        <button className="quick-add" type="button" onClick={() => addToCart(product.id)}>
+          Добавить в корзину <Plus size={17} />
+        </button>
+      </div>
+      <div className="product-meta">
+        <div>
+          <Link href={`/product/${product.id}`}>
+            <h3>{product.name}</h3>
+          </Link>
+          <p>
+            {product.stone} · {product.material}
+          </p>
+        </div>
+        <strong>
+          {rub(product.price)}
+          {product.oldPrice && <del>{rub(product.oldPrice)}</del>}
+        </strong>
+      </div>
+    </article>
+  );
+}
