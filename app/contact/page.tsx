@@ -8,6 +8,7 @@ import {
   writeLocal,
   type ContactMessageRecord,
 } from "../lib/storage";
+import { readableCmsError, submitContactMessage } from "../lib/cms";
 
 type ContactForm = {
   name: string;
@@ -31,13 +32,15 @@ export default function ContactPage() {
   const [form, setForm] = useState(initialForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const update = (field: keyof ContactForm, value: string | boolean) => {
     setForm((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: "" }));
   };
 
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
     const next: Record<string, string> = {};
     if (!form.name.trim()) next.name = "Укажите имя";
@@ -49,7 +52,6 @@ export default function ContactPage() {
     setErrors(next);
     if (Object.keys(next).length) return;
 
-    const messages = readLocal<ContactMessageRecord[]>("litops-contact-messages-v1", []);
     const message: ContactMessageRecord = {
       id: `MSG-${String(Date.now()).slice(-7)}`,
       createdAt: new Date().toISOString(),
@@ -58,10 +60,27 @@ export default function ContactPage() {
       phone: form.phone,
       subject: form.subject,
       message: form.message,
+      consent: {
+        acceptedAt: new Date().toISOString(),
+        documents: ["privacy", "personal-data-consent"],
+        version: "2026-08-10",
+      },
     };
-    writeLocal("litops-contact-messages-v1", [message, ...messages]);
-    setForm(initialForm);
-    setSuccess(true);
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      const savedRemotely = await submitContactMessage(message);
+      if (!savedRemotely) {
+        const messages = readLocal<ContactMessageRecord[]>("litops-contact-messages-v1", []);
+        writeLocal("litops-contact-messages-v1", [message, ...messages]);
+      }
+      setForm(initialForm);
+      setSuccess(true);
+    } catch (error) {
+      setSubmitError(`Не удалось отправить сообщение: ${readableCmsError(error)}`);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const input = (
@@ -162,12 +181,13 @@ export default function ContactPage() {
               checked={form.consent}
               onChange={(event) => update("consent", event.target.checked)}
             />
-            <span>Согласен на обработку данных для ответа на сообщение.</span>
+            <span>Согласен на <Link href="/legal?document=personal-data-consent">обработку персональных данных</Link> и принимаю <Link href="/legal?document=privacy">Политику конфиденциальности</Link>.</span>
             {errors.consent && <small>{errors.consent}</small>}
           </label>
-          <button className="pill pill-dark wide" type="submit">
-            <Send size={17} /> Отправить сообщение
+          <button className="pill pill-dark wide" type="submit" disabled={submitting}>
+            <Send size={17} /> {submitting ? "Отправляем…" : "Отправить сообщение"}
           </button>
+          {submitError && <p className="form-submit-error wide" role="alert">{submitError}</p>}
           {success && (
             <div className="contact-success wide" role="status">
               <Check size={17} /> Сообщение сохранено. Спасибо!

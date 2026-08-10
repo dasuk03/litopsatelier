@@ -13,6 +13,7 @@
     "check": "npm run lint && npm run typecheck && npm run build && npm run validate"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
     "lenis": "^1.3.25",
     "lucide-react": "^1.30.0",
     "next": "16.2.6",

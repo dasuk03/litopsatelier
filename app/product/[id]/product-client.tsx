@@ -29,7 +29,7 @@ const materialChoices: ProductMaterial[] = [
 
 export function ProductClient({ id }: { id: string }) {
   const router = useRouter();
-  const { products, favorites, toggleFavorite, addToCart } = useShop();
+  const { products, productsLoading, favorites, toggleFavorite, addToCart } = useShop();
   const product = products.find((item) => item.id === id);
   const [activeImage, setActiveImage] = useState(0);
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -63,6 +63,15 @@ export function ProductClient({ id }: { id: string }) {
         .slice(0, 3),
     [products, product],
   );
+
+  if (!product && productsLoading) {
+    return (
+      <div className="inner-page product-loading" role="status">
+        <span className="admin-spinner" aria-hidden="true" />
+        <p>Загружаем карточку браслета…</p>
+      </div>
+    );
+  }
 
   if (!product) {
     return (

@@ -16,6 +16,7 @@ import {
   type Product,
   type ProductMaterial,
 } from "./lib/products";
+import { loadPublishedProducts } from "./lib/cms";
 
 const storageKeys = {
   products: "litops-products-v3",
@@ -28,6 +29,7 @@ type Toast = { id: number; message: string } | null;
 
 type ShopContextValue = {
   products: Product[];
+  productsLoading: boolean;
   setProducts: (products: Product[]) => void;
   resetProducts: () => void;
   cart: CartItem[];
@@ -79,6 +81,7 @@ function cartKey(productId: string, material: ProductMaterial, size: number) {
 
 export function ShopProvider({ children }: { children: ReactNode }) {
   const [products, setProductsState] = useState<Product[]>(defaultProducts);
+  const [productsLoading, setProductsLoading] = useState(true);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
@@ -88,12 +91,29 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   const toastTimer = useRef<number | null>(null);
 
   useEffect(() => {
-    setProductsState(readStorage(storageKeys.products, defaultProducts));
+    let cancelled = false;
+    const cachedProducts = readStorage(storageKeys.products, defaultProducts);
+    setProductsState(cachedProducts);
     setCart(readStorage(storageKeys.cart, []));
     setFavorites(readStorage(storageKeys.favorites, []));
     setCatalogViewState(readStorage(storageKeys.catalogView, 3));
     setStorageReady(true);
+
+    void loadPublishedProducts()
+      .then((remoteProducts) => {
+        if (cancelled || !remoteProducts?.length) return;
+        setProductsState(remoteProducts);
+        writeStorage(storageKeys.products, remoteProducts);
+      })
+      .catch(() => {
+        // Cached catalog keeps the shop usable during a temporary network issue.
+      })
+      .finally(() => {
+        if (!cancelled) setProductsLoading(false);
+      });
+
     return () => {
+      cancelled = true;
       if (toastTimer.current) window.clearTimeout(toastTimer.current);
     };
   }, []);
@@ -211,6 +231,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   const value = useMemo<ShopContextValue>(
     () => ({
       products,
+      productsLoading,
       setProducts,
       resetProducts,
       cart,
@@ -231,6 +252,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     }),
     [
       products,
+      productsLoading,
       setProducts,
       resetProducts,
       cart,

@@ -8,6 +8,7 @@ import {
   writeLocal,
   type CustomRequestRecord,
 } from "../lib/storage";
+import { readableCmsError, submitCustomRequest } from "../lib/cms";
 
 type CustomForm = {
   jewelryType: string;
@@ -47,6 +48,8 @@ export default function CustomPage() {
   const referencesRef = useRef<Array<{ name: string; url: string }>>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -97,10 +100,9 @@ export default function CustomPage() {
     return Object.keys(next).length === 0;
   };
 
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!validate()) return;
-    const requests = readLocal<CustomRequestRecord[]>("litops-custom-requests-v1", []);
     const request: CustomRequestRecord = {
       id: `CUSTOM-${String(Date.now()).slice(-7)}`,
       createdAt: new Date().toISOString(),
@@ -118,9 +120,26 @@ export default function CustomPage() {
       phone: form.phone,
       email: form.email,
       contactMethod: form.contactMethod,
+      consent: {
+        acceptedAt: new Date().toISOString(),
+        documents: ["privacy", "personal-data-consent"],
+        version: "2026-08-10",
+      },
     };
-    writeLocal("litops-custom-requests-v1", [request, ...requests]);
-    setSuccess(true);
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      const savedRemotely = await submitCustomRequest(request);
+      if (!savedRemotely) {
+        const requests = readLocal<CustomRequestRecord[]>("litops-custom-requests-v1", []);
+        writeLocal("litops-custom-requests-v1", [request, ...requests]);
+      }
+      setSuccess(true);
+    } catch (error) {
+      setSubmitError(`Не удалось отправить заявку: ${readableCmsError(error)}`);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const field = (
@@ -303,12 +322,13 @@ export default function CustomPage() {
               checked={form.consent}
               onChange={(event) => update("consent", event.target.checked)}
             />
-            <span>Согласен на обработку данных для связи по этой заявке.</span>
+            <span>Согласен на <Link href="/legal?document=personal-data-consent">обработку персональных данных</Link> и принимаю <Link href="/legal?document=privacy">Политику конфиденциальности</Link>.</span>
             {errors.consent && <small>{errors.consent}</small>}
           </label>
-          <button className="pill pill-dark custom-submit" type="submit">
-            Отправить заявку <ArrowRight size={16} />
+          <button className="pill pill-dark custom-submit" type="submit" disabled={submitting}>
+            {submitting ? "Отправляем…" : "Отправить заявку"} <ArrowRight size={16} />
           </button>
+          {submitError && <p className="form-submit-error" role="alert">{submitError}</p>}
         </form>
 
         <aside className="custom-aside">

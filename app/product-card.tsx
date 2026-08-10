@@ -23,6 +23,7 @@ export function ProductCard({
       : product.oldPrice
         ? "Специальная цена"
         : undefined;
+  const productHref = `/product?id=${encodeURIComponent(product.id)}`;
 
   return (
     <article
@@ -31,7 +32,7 @@ export function ProductCard({
       style={{ "--delay": `${index * 70}ms` } as CSSProperties}
     >
       <div className="product-image">
-        <Link href={`/product/${product.id}`} aria-label={`Открыть ${product.name}`}>
+        <Link href={productHref} aria-label={`Открыть ${product.name}`}>
           <img src={withBasePath(product.images[0])} alt={`Браслет ${product.name}`} />
         </Link>
         {badge && <span className="badge">{badge}</span>}
@@ -49,7 +50,7 @@ export function ProductCard({
       </div>
       <div className="product-meta">
         <div>
-          <Link href={`/product/${product.id}`}>
+          <Link href={productHref}>
             <h3>{product.name}</h3>
           </Link>
           <p>

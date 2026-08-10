@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import { withBasePath } from "../lib/paths";
 import { rub } from "../lib/products";
 import { readLocal, writeLocal, type OrderRecord } from "../lib/storage";
+import { readableCmsError, submitOrder } from "../lib/cms";
 import { useShop } from "../shop";
 
 type FormState = {
@@ -47,6 +48,8 @@ export default function CheckoutPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [orderId, setOrderId] = useState("");
   const [promo, setPromo] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
     try {
@@ -97,8 +100,10 @@ export default function CheckoutPage() {
     if (validateStep()) setStep((value) => Math.min(2, value + 1));
   };
 
-  const placeOrder = () => {
+  const placeOrder = async () => {
     if (!validateStep() || rows.length === 0) return;
+    setSubmitting(true);
+    setSubmitError("");
     const id = `LA-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
     const order: OrderRecord = {
       id,
@@ -131,11 +136,25 @@ export default function CheckoutPage() {
           : [],
       ),
       total,
+      consent: {
+        acceptedAt: new Date().toISOString(),
+        documents: ["privacy", "personal-data-consent", "offer"],
+        version: "2026-08-10",
+      },
     };
-    const orders = readLocal<OrderRecord[]>("litops-orders-v1", []);
-    writeLocal("litops-orders-v1", [order, ...orders]);
-    setOrderId(id);
-    clearCart();
+    try {
+      const savedRemotely = await submitOrder(order);
+      if (!savedRemotely) {
+        const orders = readLocal<OrderRecord[]>("litops-orders-v1", []);
+        writeLocal("litops-orders-v1", [order, ...orders]);
+      }
+      setOrderId(id);
+      clearCart();
+    } catch (error) {
+      setSubmitError(`Не удалось отправить заявку: ${readableCmsError(error)}`);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const field = (
@@ -335,7 +354,7 @@ export default function CheckoutPage() {
                   onChange={(event) => update("consent", event.target.checked)}
                 />
                 <span>
-                  Согласен на обработку данных для связи и оформления заказа.
+                  Согласен с <Link href="/legal?document=personal-data-consent">обработкой персональных данных</Link>, <Link href="/legal?document=privacy">Политикой конфиденциальности</Link> и <Link href="/legal?document=offer">публичной офертой</Link>.
                 </span>
                 {errors.consent && <small>{errors.consent}</small>}
               </label>
@@ -357,11 +376,12 @@ export default function CheckoutPage() {
                 Продолжить <ArrowRight size={16} />
               </button>
             ) : (
-              <button className="pill pill-dark" type="button" onClick={placeOrder}>
-                Оформить заявку <Check size={16} />
+              <button className="pill pill-dark" type="button" onClick={placeOrder} disabled={submitting}>
+                {submitting ? "Отправляем…" : "Оформить заявку"} <Check size={16} />
               </button>
             )}
           </div>
+          {submitError && <p className="form-submit-error" role="alert">{submitError}</p>}
         </section>
 
         <aside className="checkout-summary">

@@ -42,6 +42,11 @@ export type OrderRecord = {
     price: number;
   }>;
   total: number;
+  consent?: {
+    acceptedAt: string;
+    documents: string[];
+    version: string;
+  };
 };
 
 export type CustomRequestRecord = {
@@ -61,6 +66,11 @@ export type CustomRequestRecord = {
   phone: string;
   email: string;
   contactMethod: string;
+  consent?: {
+    acceptedAt: string;
+    documents: string[];
+    version: string;
+  };
 };
 
 export type ContactMessageRecord = {
@@ -71,4 +81,9 @@ export type ContactMessageRecord = {
   phone: string;
   subject: string;
   message: string;
+  consent?: {
+    acceptedAt: string;
+    documents: string[];
+    version: string;
+  };
 };

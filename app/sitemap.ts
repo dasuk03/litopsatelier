@@ -6,7 +6,7 @@ const baseUrl = "https://litopsatelier.ru";
 export const dynamic = "force-static";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const pages = ["", "/catalog", "/custom", "/contact", "/checkout"];
+  const pages = ["", "/catalog", "/product", "/custom", "/contact", "/checkout", "/legal"];
 
   return [
     ...pages.map((path, index) => ({

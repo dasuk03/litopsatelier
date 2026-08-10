@@ -26,6 +26,8 @@ export type Product = {
   stock: number;
   isPopular?: boolean;
   isNew?: boolean;
+  published?: boolean;
+  sortOrder?: number;
   clasp: boolean;
   stoneOrigin: string;
   madeIn: string;

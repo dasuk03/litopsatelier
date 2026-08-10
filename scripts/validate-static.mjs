@@ -24,6 +24,8 @@ const requiredPages = [
   "checkout/index.html",
   "contact/index.html",
   "custom/index.html",
+  "legal/index.html",
+  "product/index.html",
   "robots.txt",
   "sitemap.xml",
   "product/larimar-sky/index.html",

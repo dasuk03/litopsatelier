@@ -259,9 +259,17 @@ export function SiteShell({ children }: { children: ReactNode }) {
           <nav aria-label="Покупателям">
             <span>Покупателям</span>
             <Link href="/contact">Контакты</Link>
-            <Link href="/#faq">Доставка и оплата</Link>
+            <Link href="/legal?document=delivery-and-returns">Доставка и возврат</Link>
             <Link href="/#faq">Уход за украшениями</Link>
             <Link href="/admin">Управление магазином</Link>
+          </nav>
+          <nav aria-label="Правовая информация">
+            <span>Документы</span>
+            <Link href="/legal?document=privacy">Обработка персональных данных</Link>
+            <Link href="/legal?document=personal-data-consent">Согласие на обработку данных</Link>
+            <Link href="/legal?document=offer">Публичная оферта</Link>
+            <Link href="/legal?document=cookies">Cookie и локальное хранение</Link>
+            <Link href="/legal?document=seller-details">Сведения о продавце</Link>
           </nav>
           <div className="footer-location">
             <span>Магазин</span>
@@ -308,7 +316,6 @@ export function SiteShell({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="menu-foot">
-          <span>Москва · Доставка по России</span>
           <span>2026</span>
         </div>
       </div>
