@@ -8,7 +8,8 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   productCategories,
   productMaterials,
@@ -27,15 +28,38 @@ type Filters = {
   discountOnly: boolean;
 };
 
-export default function CatalogPage() {
-  const { products, favorites, catalogView, setCatalogView } = useShop();
-  const prices = products.map((item) => item.price);
-  const catalogMin = Math.min(...prices);
-  const catalogMax = Math.max(...prices);
+function validCategory(value: string | null) {
+  const normalized = value === "Парные" ? "Парные браслеты" : value;
+  return normalized && productCategories.includes(normalized as (typeof productCategories)[number])
+    ? normalized
+    : "Все";
+}
+
+function validMaterial(value: string | null) {
+  return value && productMaterials.includes(value as (typeof productMaterials)[number])
+    ? value
+    : "Все";
+}
+
+function CatalogContent() {
+  const searchParams = useSearchParams();
+  const { products, productsLoading, favorites, catalogView, setCatalogView } = useShop();
+  const { catalogMin, catalogMax } = useMemo(() => {
+    if (!products.length) return { catalogMin: 0, catalogMax: 0 };
+    const prices = products.map((item) => item.price);
+    return {
+      catalogMin: Math.min(...prices),
+      catalogMax: Math.max(...prices),
+    };
+  }, [products]);
+  const requestedQuery = searchParams.get("q") ?? "";
+  const requestedCategory = validCategory(searchParams.get("category"));
+  const requestedMaterial = validMaterial(searchParams.get("material"));
+  const requestedFavorites = searchParams.get("favorites") === "1";
   const [filters, setFilters] = useState<Filters>({
-    query: "",
-    category: "Все",
-    material: "Все",
+    query: requestedQuery,
+    category: requestedCategory,
+    material: requestedMaterial,
     size: null,
     minPrice: catalogMin,
     maxPrice: catalogMax,
@@ -44,23 +68,48 @@ export default function CatalogPage() {
   const [sort, setSort] = useState("popular");
   const [visibleCount, setVisibleCount] = useState(9);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [favoritesOnly, setFavoritesOnly] = useState(requestedFavorites);
+  const previousPriceBounds = useRef({ min: catalogMin, max: catalogMax });
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
     setFilters((current) => ({
       ...current,
-      query: params.get("q") ?? "",
-      category: params.get("category") ?? "Все",
-      material: params.get("material") ?? "Все",
+      query: requestedQuery,
+      category: requestedCategory,
+      material: requestedMaterial,
     }));
-    setFavoritesOnly(params.get("favorites") === "1");
-  }, []);
+    setFavoritesOnly(requestedFavorites);
+    setVisibleCount(9);
+    setFilterOpen(false);
+  }, [requestedCategory, requestedFavorites, requestedMaterial, requestedQuery]);
 
   useEffect(() => {
-    document.body.style.overflow = filterOpen ? "hidden" : "";
+    const previous = previousPriceBounds.current;
+    setFilters((current) => {
+      if (!products.length) {
+        return current.minPrice === 0 && current.maxPrice === 0
+          ? current
+          : { ...current, minPrice: 0, maxPrice: 0 };
+      }
+
+      const minPrice =
+        !Number.isFinite(current.minPrice) || current.minPrice <= previous.min
+          ? catalogMin
+          : Math.min(Math.max(current.minPrice, catalogMin), catalogMax);
+      const maxPrice =
+        !Number.isFinite(current.maxPrice) || current.maxPrice >= previous.max
+          ? catalogMax
+          : Math.min(Math.max(current.maxPrice, catalogMin), catalogMax);
+      if (minPrice === current.minPrice && maxPrice === current.maxPrice) return current;
+      return { ...current, minPrice, maxPrice: Math.max(minPrice, maxPrice) };
+    });
+    previousPriceBounds.current = { min: catalogMin, max: catalogMax };
+  }, [catalogMax, catalogMin, products.length]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("catalog-filter-open", filterOpen);
     return () => {
-      if (filterOpen) document.body.style.overflow = "";
+      document.documentElement.classList.remove("catalog-filter-open");
     };
   }, [filterOpen]);
 
@@ -180,23 +229,26 @@ export default function CatalogPage() {
           ))}
         </div>
       </div>
-      <div className="filter-group">
-        <h3>Цена до {filters.maxPrice.toLocaleString("ru-RU")} ₽</h3>
-        <input
-          className="range-single"
-          type="range"
-          min={catalogMin}
-          max={catalogMax}
-          step="100"
-          value={filters.maxPrice}
-          onChange={(event) =>
-            setFilters((current) => ({
-              ...current,
-              maxPrice: Number(event.target.value),
-            }))
-          }
-        />
-      </div>
+      {products.length > 0 && (
+        <div className="filter-group">
+          <h3>Цена до {filters.maxPrice.toLocaleString("ru-RU")} ₽</h3>
+          <input
+            className="range-single"
+            type="range"
+            min={catalogMin}
+            max={catalogMax}
+            step="100"
+            value={filters.maxPrice}
+            aria-label="Максимальная цена"
+            onChange={(event) =>
+              setFilters((current) => ({
+                ...current,
+                maxPrice: Number(event.target.value),
+              }))
+            }
+          />
+        </div>
+      )}
       <div className="filter-group filter-switches">
         <label className="switch-row">
           <input
@@ -301,8 +353,8 @@ export default function CatalogPage() {
 
       <div className="catalog-layout">
         <aside className="catalog-sidebar">{filterContent}</aside>
-        <section className="catalog-results">
-          <div className="catalog-result-line">
+        <section className="catalog-results" aria-busy={productsLoading}>
+          <div className="catalog-result-line" aria-live="polite">
             <span>Найдено: {filtered.length}</span>
           </div>
           <div className={`catalog-grid catalog-grid--${catalogView}`}>
@@ -331,7 +383,11 @@ export default function CatalogPage() {
         </section>
       </div>
 
-      <div className={`filter-bottom-sheet ${filterOpen ? "is-open" : ""}`} aria-hidden={!filterOpen}>
+      <div
+        className={`filter-bottom-sheet ${filterOpen ? "is-open" : ""}`}
+        aria-hidden={!filterOpen}
+        inert={!filterOpen}
+      >
         <button
           className="filter-sheet-backdrop"
           type="button"
@@ -352,5 +408,19 @@ export default function CatalogPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function CatalogPage() {
+  return (
+    <Suspense
+      fallback={(
+        <div className="inner-page catalog-page">
+          <div className="catalog-loading" role="status">Загружаем каталог…</div>
+        </div>
+      )}
+    >
+      <CatalogContent />
+    </Suspense>
   );
 }

@@ -16,7 +16,6 @@ import {
   type Product,
   type ProductMaterial,
 } from "./lib/products";
-import { loadPublishedProducts } from "./lib/cms";
 
 const storageKeys = {
   products: "litops-products-v3",
@@ -99,9 +98,10 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     setCatalogViewState(readStorage(storageKeys.catalogView, 3));
     setStorageReady(true);
 
-    void loadPublishedProducts()
+    void import("./lib/cms")
+      .then(({ loadPublishedProducts }) => loadPublishedProducts())
       .then((remoteProducts) => {
-        if (cancelled || !remoteProducts?.length) return;
+        if (cancelled || remoteProducts === null) return;
         setProductsState(remoteProducts);
         writeStorage(storageKeys.products, remoteProducts);
       })

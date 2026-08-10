@@ -127,29 +127,72 @@ export function SiteShell({ children }: { children: ReactNode }) {
     setMenuOpen(false);
     setSearchOpen(false);
     setSticky(window.scrollY > 22);
-    const frame = window.requestAnimationFrame(() => {
-      const observer = new IntersectionObserver(
-        (entries) =>
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) entry.target.classList.add("is-visible");
-          }),
-        { threshold: 0.12 },
-      );
-      document
-        .querySelectorAll("[data-reveal]")
-        .forEach((node) => observer.observe(node));
-      (window as Window & { __litopsObserver?: IntersectionObserver }).__litopsObserver =
-        observer;
-    });
-    return () => {
-      window.cancelAnimationFrame(frame);
-      (window as Window & { __litopsObserver?: IntersectionObserver }).__litopsObserver?.disconnect();
-    };
   }, [pathname]);
 
   useEffect(() => {
+    const revealSelector = "[data-reveal]";
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const revealImmediately = (root: ParentNode) => {
+      if (root instanceof Element && root.matches(revealSelector)) {
+        root.classList.add("is-visible");
+      }
+      root.querySelectorAll(revealSelector).forEach((node) => node.classList.add("is-visible"));
+    };
+
+    if (reducedMotion || !("IntersectionObserver" in window)) {
+      revealImmediately(document);
+      const mutationObserver = new MutationObserver((records) => {
+        records.forEach((record) => {
+          record.addedNodes.forEach((node) => {
+            if (node instanceof Element) revealImmediately(node);
+          });
+        });
+      });
+      mutationObserver.observe(document.body, { childList: true, subtree: true });
+      return () => mutationObserver.disconnect();
+    }
+
+    const observed = new WeakSet<Element>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        });
+      },
+      { threshold: 0.08, rootMargin: "0px 0px -4%" },
+    );
+    const observeRevealNodes = (root: ParentNode) => {
+      const nodes: Element[] = [];
+      if (root instanceof Element && root.matches(revealSelector)) nodes.push(root);
+      root.querySelectorAll(revealSelector).forEach((node) => nodes.push(node));
+      nodes.forEach((node) => {
+        if (observed.has(node)) return;
+        observed.add(node);
+        observer.observe(node);
+      });
+    };
+
+    observeRevealNodes(document);
+    const mutationObserver = new MutationObserver((records) => {
+      records.forEach((record) => {
+        record.addedNodes.forEach((node) => {
+          if (node instanceof Element) observeRevealNodes(node);
+        });
+      });
+    });
+    mutationObserver.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      mutationObserver.disconnect();
+      observer.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
     const modalOpen = menuOpen || searchOpen || cartOpen;
-    document.body.style.overflow = modalOpen ? "hidden" : "";
+    document.documentElement.classList.toggle("shell-modal-open", modalOpen);
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       setMenuOpen(false);
@@ -158,7 +201,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
     };
     document.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = "";
+      document.documentElement.classList.remove("shell-modal-open");
       document.removeEventListener("keydown", onKey);
     };
   }, [menuOpen, searchOpen, cartOpen, setCartOpen]);
@@ -189,7 +232,13 @@ export function SiteShell({ children }: { children: ReactNode }) {
           href="/"
           aria-label="Litops Atelier — главная"
         >
-          <img src={withBasePath("/images/litops-logo-transparent.png")} alt="Litops Atelier" />
+          <img
+            src={withBasePath("/images/litops-logo-transparent.png")}
+            alt="Litops Atelier"
+            width="86"
+            height="68"
+            decoding="async"
+          />
         </Link>
         <div className="header-actions">
           <button
@@ -243,7 +292,14 @@ export function SiteShell({ children }: { children: ReactNode }) {
               href="/"
               aria-label="Litops Atelier — главная"
             >
-              <img src={withBasePath("/images/litops-logo-transparent.png")} alt="Litops Atelier" />
+              <img
+                src={withBasePath("/images/litops-logo-transparent.png")}
+                alt="Litops Atelier"
+                width="184"
+                height="160"
+                loading="lazy"
+                decoding="async"
+              />
             </Link>
             <p>
               Браслеты ручной работы
@@ -290,9 +346,19 @@ export function SiteShell({ children }: { children: ReactNode }) {
         </div>
       </footer>
 
-      <div className={`menu-overlay ${menuOpen ? "is-open" : ""}`} aria-hidden={!menuOpen}>
+      <div
+        className={`menu-overlay ${menuOpen ? "is-open" : ""}`}
+        aria-hidden={!menuOpen}
+        inert={!menuOpen}
+      >
         <div className="menu-brand" aria-hidden="true">
-          <img src={withBasePath("/images/litops-logo-transparent.png")} alt="" />
+          <img
+            src={withBasePath("/images/litops-logo-transparent.png")}
+            alt=""
+            width="88"
+            height="76"
+            decoding="async"
+          />
         </div>
         <button
           className="round-close"
@@ -321,7 +387,11 @@ export function SiteShell({ children }: { children: ReactNode }) {
         </div>
       </div>
 
-      <div className={`search-overlay ${searchOpen ? "is-open" : ""}`} aria-hidden={!searchOpen}>
+      <div
+        className={`search-overlay ${searchOpen ? "is-open" : ""}`}
+        aria-hidden={!searchOpen}
+        inert={!searchOpen}
+      >
         <button
           className="search-backdrop"
           type="button"
@@ -342,7 +412,11 @@ export function SiteShell({ children }: { children: ReactNode }) {
         </form>
       </div>
 
-      <aside className={`cart-drawer ${cartOpen ? "is-open" : ""}`} aria-hidden={!cartOpen}>
+      <aside
+        className={`cart-drawer ${cartOpen ? "is-open" : ""}`}
+        aria-hidden={!cartOpen}
+        inert={!cartOpen}
+      >
         <div className="cart-head">
           <div>
             <p className="eyebrow">Ваш выбор</p>

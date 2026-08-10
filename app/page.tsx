@@ -64,7 +64,7 @@ const faqs = [
 ] as const;
 
 export default function Home() {
-  const { products } = useShop();
+  const { products, productsLoading } = useShop();
   const [activeFilter, setActiveFilter] = useState<(typeof homeFilters)[number]>("Все");
   const [activeMaterial, setActiveMaterial] = useState(0);
   const [wristSize, setWristSize] = useState("17 см");
@@ -186,6 +186,7 @@ export default function Home() {
                 key={filter}
                 className={activeFilter === filter ? "is-active" : ""}
                 onClick={() => setActiveFilter(filter)}
+                aria-pressed={activeFilter === filter}
               >
                 {filter}
               </button>
@@ -193,11 +194,17 @@ export default function Home() {
           </div>
           <span>{shownProducts.length} моделей</span>
         </div>
-        <div className="product-grid">
+        <div className="product-grid" aria-live="polite" aria-busy={productsLoading}>
           {shownProducts.map((product, index) => (
             <ProductCard product={product} index={index} key={product.id} />
           ))}
         </div>
+        {!productsLoading && shownProducts.length === 0 && (
+          <div className="collection-empty" role="status">
+            <p>В этой категории пока нет опубликованных моделей.</p>
+            <Link href="/catalog">Открыть весь каталог</Link>
+          </div>
+        )}
         <div className="collection-foot" data-reveal>
           <p>Каждый браслет можно собрать в вашем размере.</p>
           <Link href="/catalog">

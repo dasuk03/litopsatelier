@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ImgHTMLAttributes } from "react";
-import { loadProductImage, neonImagePrefix } from "./lib/cms";
+import { neonImagePrefix } from "./lib/cms-constants";
 import { withBasePath } from "./lib/paths";
 
 type ProductImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src" | "alt"> & {
@@ -14,6 +14,8 @@ export function ProductImage({
   src,
   alt,
   fallback = "/images/product-terra.webp",
+  loading = "lazy",
+  decoding = "async",
   ...props
 }: ProductImageProps) {
   const placeholder = withBasePath(fallback);
@@ -31,7 +33,8 @@ export function ProductImage({
     }
 
     setResolved(placeholder);
-    void loadProductImage(src)
+    void import("./lib/cms")
+      .then(({ loadProductImage }) => loadProductImage(src))
       .then((value) => {
         if (active) setResolved(value);
       })
@@ -44,5 +47,5 @@ export function ProductImage({
     };
   }, [placeholder, src]);
 
-  return <img {...props} src={resolved} alt={alt} />;
+  return <img {...props} src={resolved} alt={alt} loading={loading} decoding={decoding} />;
 }

@@ -345,6 +345,7 @@
 .catalog-empty { display: flex; min-height: 420px; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .catalog-empty h2 { margin: 0; font-family: Iowan Old Style,Baskerville,"Times New Roman",serif; font-size: 40px; font-weight: 400; }
 .catalog-empty p { margin: 9px 0 24px; color: var(--muted); font-size: 12px; }
+.catalog-loading { display: grid; min-height: 60svh; place-items: center; color: var(--muted); font-size: 11px; }
 .show-more-button {
   display: block;
   min-width: 210px;

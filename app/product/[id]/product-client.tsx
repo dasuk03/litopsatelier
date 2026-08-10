@@ -46,9 +46,14 @@ export function ProductClient({ id }: { id: string }) {
   }, [product]);
 
   useEffect(() => {
-    document.body.style.overflow = viewerOpen ? "hidden" : "";
+    document.documentElement.classList.toggle("image-viewer-open", viewerOpen);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setViewerOpen(false);
+    };
+    if (viewerOpen) document.addEventListener("keydown", onKey);
     return () => {
-      if (viewerOpen) document.body.style.overflow = "";
+      document.documentElement.classList.remove("image-viewer-open");
+      document.removeEventListener("keydown", onKey);
     };
   }, [viewerOpen]);
 
@@ -175,7 +180,12 @@ export function ProductClient({ id }: { id: string }) {
             onClick={() => setViewerOpen(true)}
             aria-label="Открыть изображение на весь экран"
           >
-            <ProductImage src={product.images[activeImage]} alt={product.name} />
+            <ProductImage
+              src={product.images[activeImage]}
+              alt={product.name}
+              loading="eager"
+              fetchPriority="high"
+            />
             <span>
               <ZoomIn size={17} /> Увеличить
             </span>
@@ -327,7 +337,11 @@ export function ProductClient({ id }: { id: string }) {
         </section>
       )}
 
-      <div className={`image-viewer ${viewerOpen ? "is-open" : ""}`} aria-hidden={!viewerOpen}>
+      <div
+        className={`image-viewer ${viewerOpen ? "is-open" : ""}`}
+        aria-hidden={!viewerOpen}
+        inert={!viewerOpen}
+      >
         <button
           className="image-viewer-close"
           type="button"
@@ -336,7 +350,12 @@ export function ProductClient({ id }: { id: string }) {
         >
           <X size={23} />
         </button>
-        <button className="image-viewer-backdrop" type="button" onClick={() => setViewerOpen(false)} />
+        <button
+          className="image-viewer-backdrop"
+          type="button"
+          onClick={() => setViewerOpen(false)}
+          aria-label="Закрыть просмотр изображения"
+        />
         <ProductImage src={product.images[activeImage]} alt={product.name} />
       </div>
     </div>

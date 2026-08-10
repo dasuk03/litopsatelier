@@ -3,6 +3,7 @@ import type {
   CustomRequestRecord,
   OrderRecord,
 } from "./storage";
+import { neonImagePrefix } from "./cms-constants";
 import {
   defaultLegalDocuments,
   legalDocumentSlugs,
@@ -12,7 +13,7 @@ import {
 import type { Product } from "./products";
 import { isCmsConfigured, requireNeon } from "./neon";
 
-export const neonImagePrefix = "neon-image:";
+export { neonImagePrefix } from "./cms-constants";
 
 type ProductRow = {
   id: string;
@@ -240,14 +241,19 @@ export function loadProductImage(reference: string) {
   if (cached) return cached;
 
   const request = (async () => {
-    const client = requireNeon();
-    const { data, error } = await client
-      .from("product_images")
-      .select("data_uri")
-      .eq("id", id)
-      .single();
-    if (error) throw new Error(error.message);
-    return String(data.data_uri);
+    try {
+      const client = requireNeon();
+      const { data, error } = await client
+        .from("product_images")
+        .select("data_uri")
+        .eq("id", id)
+        .single();
+      if (error) throw new Error(error.message);
+      return String(data.data_uri);
+    } catch (error) {
+      imageCache.delete(id);
+      throw error;
+    }
   })();
   imageCache.set(id, request);
   return request;
@@ -398,6 +404,12 @@ export function readableCmsError(error: unknown) {
   const message = messageFrom(error);
   if (/invalid (login credentials|email or password)|incorrect password/i.test(message)) {
     return "Неверный логин или пароль";
+  }
+  if (/invalid origin|origin.*(not allowed|blocked)|access blocked/i.test(message)) {
+    return "Домен сайта не разрешён в Neon Auth. Обновите страницу и повторите попытку.";
+  }
+  if (/failed to fetch|network(_|\s)?(timeout|dns|refused)|load failed/i.test(message)) {
+    return "Не удалось связаться с Neon. Проверьте соединение и повторите попытку.";
   }
   if (/row-level security|permission denied/i.test(message)) {
     return "У этой учётной записи нет прав администратора";

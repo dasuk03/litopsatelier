@@ -59,6 +59,23 @@ const tabs = [
 type TabId = (typeof tabs)[number][0];
 type AuthState = "checking" | "unconfigured" | "signed-out" | "unauthorized" | "ready";
 
+const authRequestTimeoutMs = 15_000;
+
+async function withAuthTimeout<T>(request: Promise<T>) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error("Сервис авторизации Neon не ответил за 15 секунд. Обновите страницу и повторите попытку."));
+    }, authRequestTimeoutMs);
+  });
+
+  try {
+    return await Promise.race([request, timeout]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 export default function AdminPage() {
   const { products, setProducts, showToast } = useShop();
   const [authState, setAuthState] = useState<AuthState>(isCmsConfigured ? "checking" : "unconfigured");
@@ -85,15 +102,19 @@ export default function AdminPage() {
 
   const verifyAccess = useCallback(async () => {
     if (!neon) return setAuthState("unconfigured");
-    const { data } = await neon.auth.getSession();
-    if (!data.session) return setAuthState("signed-out");
-    setAccountEmail(data.session.user.email ?? "Администратор");
     try {
-      const allowed = await isCurrentUserAdmin();
+      const { data, error } = await withAuthTimeout(neon.auth.getSession());
+      if (error) throw error;
+      if (!data.session) {
+        setAuthState("signed-out");
+        return;
+      }
+      setAccountEmail(data.session.user.email ?? "Администратор");
+      const allowed = await withAuthTimeout(isCurrentUserAdmin());
       setAuthState(allowed ? "ready" : "unauthorized");
     } catch (error) {
       setAuthError(readableCmsError(error));
-      setAuthState("unauthorized");
+      setAuthState("signed-out");
     }
   }, []);
 
@@ -147,15 +168,18 @@ export default function AdminPage() {
     if (!neon) return;
     setSigningIn(true);
     setAuthError("");
-    const { error } = await neon.auth.signInWithPassword({ email: email.trim(), password });
-    if (error) {
+    try {
+      const { error } = await withAuthTimeout(
+        neon.auth.signInWithPassword({ email: email.trim(), password }),
+      );
+      if (error) throw error;
+      await verifyAccess();
+      setPassword("");
+    } catch (error) {
       setAuthError(readableCmsError(error));
+    } finally {
       setSigningIn(false);
-      return;
     }
-    await verifyAccess();
-    setPassword("");
-    setSigningIn(false);
   };
 
   const createOwnerAccount = async (event: FormEvent) => {
@@ -168,11 +192,13 @@ export default function AdminPage() {
     setSigningIn(true);
     setAuthError("");
     try {
-      const { data, error } = await neon.auth.signUp({
-        email: email.trim(),
-        password,
-        options: { data: { name: "Владелец Litops Atelier" } },
-      });
+      const { data, error } = await withAuthTimeout(
+        neon.auth.signUp({
+          email: email.trim(),
+          password,
+          options: { data: { name: "Владелец Litops Atelier" } },
+        }),
+      );
       if (error) {
         setAuthError(readableCmsError(error));
         return;
@@ -182,7 +208,7 @@ export default function AdminPage() {
         setAuthMode("signin");
         return;
       }
-      const allowed = await claimAdmin(inviteCode);
+      const allowed = await withAuthTimeout(claimAdmin(inviteCode));
       if (!allowed) {
         setAuthError("Одноразовый код владельца неверен или уже использован");
         setAuthState("unauthorized");
@@ -202,7 +228,7 @@ export default function AdminPage() {
     setSigningIn(true);
     setAuthError("");
     try {
-      const allowed = await claimAdmin(inviteCode);
+      const allowed = await withAuthTimeout(claimAdmin(inviteCode));
       if (!allowed) {
         setAuthError("Одноразовый код владельца неверен, истёк или уже использован");
         return;
