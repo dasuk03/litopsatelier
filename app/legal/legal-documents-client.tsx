@@ -54,7 +54,9 @@ export function LegalDocumentsClient() {
 
   return (
     <div className="inner-page legal-page">
-      <header className="legal-header">
+      <header
+        className={`legal-header${document.slug === "seller-details" ? " legal-header--seller" : ""}`}
+      >
         <p className="eyebrow">Информация для покупателей</p>
         <h1>{document.title}</h1>
         <p>{document.summary}</p>

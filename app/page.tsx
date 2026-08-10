@@ -67,9 +67,6 @@ export default function Home() {
   const { products, productsLoading } = useShop();
   const [activeFilter, setActiveFilter] = useState<(typeof homeFilters)[number]>("Все");
   const [activeMaterial, setActiveMaterial] = useState(0);
-  const [wristSize, setWristSize] = useState("17 см");
-  const [palette, setPalette] = useState("Графит");
-  const [metal, setMetal] = useState("Нержавеющая сталь");
   const [openFaq, setOpenFaq] = useState(0);
 
   useEffect(() => {
@@ -108,8 +105,6 @@ export default function Home() {
           : products.filter((product) => product.category === activeFilter);
     return list.slice(0, 6);
   }, [activeFilter, products]);
-
-  const customHref = `/custom?size=${encodeURIComponent(wristSize)}&tone=${encodeURIComponent(palette)}&material=${encodeURIComponent(metal)}`;
 
   return (
     <>
@@ -351,92 +346,10 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="individual" id="individual">
-        <div className="individual-copy" data-reveal>
-          <p className="eyebrow">Только ваш</p>
-          <h2>
-            Соберите
-            <br />
-            <em>личное сочетание</em>
-          </h2>
-          <p>
-            Выберите основу будущего браслета. Затем мастер уточнит камни,
-            посадку и финальные детали.
-          </p>
-          <div className="individual-note">
-            <span>01</span>
-            <p>
-              Каждая индивидуальная работа начинается с короткого диалога, а
-              не с готового шаблона.
-            </p>
-          </div>
-        </div>
-        <div className="configurator" data-reveal>
-          <div className="config-step">
-            <div className="config-label">
-              <span>01</span>
-              <h3>Размер запястья</h3>
-            </div>
-            <div className="choice-row">
-              {["15 см", "16 см", "17 см", "18 см", "19 см", "20 см"].map((size) => (
-                <button
-                  type="button"
-                  key={size}
-                  className={wristSize === size ? "is-active" : ""}
-                  onClick={() => setWristSize(size)}
-                >
-                  {size}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="config-step">
-            <div className="config-label">
-              <span>02</span>
-              <h3>Палитра</h3>
-            </div>
-            <div className="choice-row palette-row">
-              {["Графит", "Молочный", "Земля", "Смешанный"].map((tone) => (
-                <button
-                  type="button"
-                  key={tone}
-                  className={palette === tone ? "is-active" : ""}
-                  onClick={() => setPalette(tone)}
-                >
-                  <i data-tone={tone} />
-                  {tone}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="config-step">
-            <div className="config-label">
-              <span>03</span>
-              <h3>Фурнитура</h3>
-            </div>
-            <div className="choice-row">
-              {["Нержавеющая сталь", "Позолоченная сталь", "Без металла"].map((choice) => (
-                <button
-                  type="button"
-                  key={choice}
-                  className={metal === choice ? "is-active" : ""}
-                  onClick={() => setMetal(choice)}
-                >
-                  {choice}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="config-total">
-            <div>
-              <span>Индивидуальная сборка</span>
-              <strong>от 5 900 ₽</strong>
-            </div>
-            <Link className="pill pill-light" href={customHref}>
-              Продолжить заявку <ArrowRight size={16} />
-            </Link>
-          </div>
-        </div>
+      <section className="individual" id="individual" aria-label="Индивидуальный заказ">
+        <Link className="pill pill-light individual-order-button" href="/custom" data-reveal>
+          Оформить индивидуальный заказ <ArrowRight size={16} />
+        </Link>
       </section>
 
       <section className="voices shell" id="faq">

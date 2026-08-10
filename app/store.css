@@ -755,6 +755,7 @@
 .legal-header { max-width: 980px; padding: 42px 0 68px; }
 .legal-header .eyebrow { margin-bottom: 15px; color: var(--muted); }
 .legal-header h1 { margin: 0; font-family: Iowan Old Style,Baskerville,"Times New Roman",serif; font-size: clamp(52px,6.2vw,92px); font-weight: 400; letter-spacing: -.055em; line-height: .92; }
+.legal-header--seller h1 { font-size: clamp(44px,5.2vw,74px); }
 .legal-header > p:not(.eyebrow) { max-width: 700px; margin: 22px 0 13px; color: var(--muted); font-size: 13px; line-height: 1.7; }
 .legal-header > span { color: var(--muted); font-size: 8px; letter-spacing: .1em; text-transform: uppercase; }
 .legal-layout { display: grid; grid-template-columns: 320px minmax(0,780px); gap: clamp(40px,7vw,110px); align-items: start; padding-top: 42px; border-top: 1px solid var(--line); }
@@ -911,5 +912,6 @@ button:disabled { cursor: wait; opacity: .58; }
   .admin-document-actions .pill { width: 100%; }
   .legal-header { padding-top: 35px; }
   .legal-header h1 { font-size: 50px; }
+  .legal-header--seller h1 { font-size: clamp(36px,11vw,44px); letter-spacing: -.045em; }
   .legal-layout { gap: 35px; }
 }
