@@ -32,9 +32,8 @@ const navigation = [
   ["01", "Главная", "/"],
   ["02", "Каталог", "/catalog"],
   ["03", "О бренде", "/#story"],
-  ["04", "Материалы", "/#materials"],
-  ["05", "Индивидуальный заказ", "/custom"],
-  ["06", "Контакты", "/contact"],
+  ["04", "Индивидуальный заказ", "/custom"],
+  ["05", "Контакты", "/contact"],
 ] as const;
 
 export function SiteShell({ children }: { children: ReactNode }) {
@@ -310,7 +309,6 @@ export function SiteShell({ children }: { children: ReactNode }) {
             <span>Навигация</span>
             <Link href="/catalog">Каталог</Link>
             <Link href="/#story">О бренде</Link>
-            <Link href="/#materials">Материалы</Link>
             <Link href="/custom">Индивидуальный заказ</Link>
           </nav>
           <nav aria-label="Покупателям">

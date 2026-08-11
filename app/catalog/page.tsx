@@ -235,6 +235,7 @@ function CatalogContent() {
           <input
             className="range-single"
             type="range"
+            data-lenis-prevent="true"
             min={catalogMin}
             max={catalogMax}
             step="100"
@@ -394,7 +395,7 @@ function CatalogContent() {
           onClick={() => setFilterOpen(false)}
           aria-label="Закрыть фильтры"
         />
-        <div className="filter-bottom-sheet-panel">
+        <div className="filter-bottom-sheet-panel" data-lenis-prevent="true">
           <div className="filter-bottom-sheet-head">
             <h2>Фильтры</h2>
             <button type="button" onClick={() => setFilterOpen(false)} aria-label="Закрыть">
