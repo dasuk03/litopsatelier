@@ -10,7 +10,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { withBasePath } from "./lib/paths";
 import { ProductCard } from "./product-card";
 import { useShop } from "./shop";
@@ -43,6 +43,41 @@ export default function Home() {
   const [palette, setPalette] = useState("Графит");
   const [metal, setMetal] = useState("Нержавеющая сталь");
   const [openFaq, setOpenFaq] = useState(0);
+
+  useEffect(() => {
+    let ticking = false;
+
+    const updateStory = () => {
+      const story = document.querySelector<HTMLElement>("[data-story]");
+
+      if (story) {
+        const rect = story.getBoundingClientRect();
+        const range = Math.max(1, story.offsetHeight - window.innerHeight);
+        const progress = Math.min(1, Math.max(0, -rect.top / range));
+
+        story.style.setProperty("--story-progress", `${progress}`);
+        story.style.setProperty("--story-radius", `${12 + progress * 96}%`);
+      }
+
+      ticking = false;
+    };
+
+    const requestStoryUpdate = () => {
+      if (!ticking) {
+        ticking = true;
+        window.requestAnimationFrame(updateStory);
+      }
+    };
+
+    updateStory();
+    window.addEventListener("scroll", requestStoryUpdate, { passive: true });
+    window.addEventListener("resize", requestStoryUpdate);
+
+    return () => {
+      window.removeEventListener("scroll", requestStoryUpdate);
+      window.removeEventListener("resize", requestStoryUpdate);
+    };
+  }, []);
 
   const shownProducts = useMemo(() => {
     const list =
@@ -158,40 +193,41 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="story-scene" id="story">
-        <div className="story-layout shell">
-          <div className="story-copy" data-reveal>
-            <p className="eyebrow">О бренде</p>
-            <h2>
-              У каждого камня
-              <br />
-              <em>свой характер</em>
-            </h2>
-            <div className="story-copy-foot">
-              <p>
-                Небольшая прожилка, облако внутри кварца или разница в оттенке —
-                не дефект, а подпись природы. Мы собираем украшения вручную и
-                сохраняем эту природную неповторимость.
-              </p>
-              <span>Litops Atelier · Ручная работа</span>
-            </div>
+      <section className="story-scene" id="story" data-story>
+        <div className="story-sticky">
+          <div className="story-intro" aria-hidden="true">
+            <span>Не повторить дважды</span>
+            <span>Не спутать с другим</span>
           </div>
-          <figure className="story-visual" data-reveal>
-            <div className="story-image-frame">
-              <img
-                src={withBasePath("/images/brand-labradorite.webp")}
-                alt="Браслет Litops Atelier из лабрадорита"
-                width="1254"
-                height="1254"
-                loading="lazy"
-                decoding="async"
-              />
-            </div>
-            <figcaption>
-              <span>Лабрадорит</span>
-              <span>Естественный рисунок камня</span>
-            </figcaption>
-          </figure>
+          <h2 className="story-title">
+            У каждого камня
+            <br />
+            <em>свой характер</em>
+          </h2>
+          <div className="story-aperture" aria-hidden="true">
+            <img
+              src={withBasePath("/images/brand-labradorite.webp")}
+              alt=""
+              width="1254"
+              height="1254"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+          <div className="story-finale">
+            <p className="eyebrow">Философия Litops</p>
+            <h3>Мы не прячем природную неповторимость.</h3>
+            <p>
+              Небольшая прожилка, облако внутри кварца или разница в оттенке —
+              не дефект, а подпись природы. Ручная сборка помогает ей прозвучать
+              точнее.
+            </p>
+          </div>
+          <div className="story-meter" aria-hidden="true">
+            <span>0</span>
+            <i />
+            <span>100</span>
+          </div>
         </div>
       </section>
 
